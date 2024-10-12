@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>JWT 암호화 테스트</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.js"></script> <!-- AES를 위한 CryptoJS -->
+
+    <script>
+        async function getToken() {
+            try {
+                const response = await fetch('/getToken');
+                const token = await response.text();
+                document.getElementById('token').value = token;
+                alert("JWT 토큰이 생성되었습니다: " + token);
+            } catch (error) {
+                console.error("토큰 생성 오류: ", error);
+            }
+        }
+
+        async function encrypt() {
+            const token = document.getElementById('token').value;
+            if (!token) {
+                alert("먼저 토큰을 생성해주세요.");
+                return;
+            }
+
+            try {
+                const response = await fetch(`/encrypt?jwt=${token}`);
+                const result = await response.text();
+                const encryptedValue = result.split('\n')[0].split(': ')[1];
+
+                document.getElementById('encryptedValue').value = encryptedValue;
+                alert("암호화 성공");
+            } catch (error) {
+                console.error("암호화 오류: ", error);
+            }
+        }
+
+        async function decrypt() {
+            const encryptedValue = document.getElementById('encryptedValue').value;
+            const token = document.getElementById('token').value;
+            if (!encryptedValue || !token) {
+                alert("암호화된 값과 토큰이 필요합니다.");
+                return;
+            }
+
+            try {
+                // JWT에서 'custId' 클레임을 Salt로 추출
+                const salt = CryptoJS.enc.Utf8.parse(getClaimFromJWT(token));  // JWT에서 추출한 custId를 사용
+                const key = generateAESKey(salt); // AES-256 키 생성
+
+                // Base64로 인코딩된 암호화 값을 디코딩
+                const encryptedBytes = CryptoJS.enc.Base64.parse(encryptedValue);  // Base64로 인코딩된 암호화 데이터를 디코딩
+
+                // AES 복호화 (Base64 디코딩된 값을 복호화)
+                const decrypted = CryptoJS.AES.decrypt(
+                    { ciphertext: encryptedBytes },  // 복호화할 값
+                    key,  // AES-256 키
+                    {
+                        mode: CryptoJS.mode.ECB,  // AES 모드
+                        padding: CryptoJS.pad.Pkcs7  // 패딩 방식
+                    }
+                );
+
+                console.log("복호화된 데이터: ", decrypted);
+
+                // 복호화된 값을 UTF-8로 변환
+                const decryptedValue = decrypted.toString(CryptoJS.enc.Utf8);
+                console.log("복호화된 문자열: ", decryptedValue);
+                document.getElementById('decryptedValue').value = decryptedValue;
+
+                alert("복호화 성공");
+            } catch (error) {
+                console.error("복호화 오류: ", error);
+            }
+        }
+
+        function generateAESKey(salt) {
+            const password = CryptoJS.enc.Utf8.parse("password");  // AES-256을 위한 패스워드(서버사이드와 동일해야함)
+            const key = CryptoJS.PBKDF2(password, salt, {
+                keySize: 256 / 32,  // 256비트 AES 키 생성
+                iterations: 65536,  // 반복 횟수
+                hasher: CryptoJS.algo.SHA256  // 해시 알고리즘을 SHA256으로 지정
+            });
+            console.log("비밀 키 (Base64): ", key.toString(CryptoJS.enc.Base64));
+            return key;
+        }
+
+        function getClaimFromJWT(jwt) {
+            const base64Url = jwt.split('.')[1];  // JWT의 페이로드 부분 추출
+            const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');  // Base64 URL 인코딩 -> Base64 인코딩 변환
+            const jsonPayload = decodeURIComponent(atob(base64).split('').map(function (c) {
+                return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+            }).join(''));
+
+            // 페이로드에서 custId 클레임 추출
+            const claims = JSON.parse(jsonPayload);
+            return claims.custId;  // 'custId' 클레임 반환
+        }
+    </script>
+</head>
+<body>
+
+<h1>JWT 암호화/복호화 테스트</h1>
+
+<div>
+    <button onclick="getToken()">JWT 토큰 생성</button>
+    <br><br>
+    <label for="token">JWT 토큰:</label><br>
+    <textarea id="token" rows="3" cols="50"></textarea>
+</div>
+
+<div>
+    <button onclick="encrypt()">랜덤 단어 암호화</button>
+    <br><br>
+    <label for="encryptedValue">암호화된 값:</label><br>
+    <textarea id="encryptedValue" rows="3" cols="50"></textarea>
+</div>
+
+<div>
+    <button onclick="decrypt()">암호화된 값 복호화</button>
+    <br><br>
+    <label for="decryptedValue">복호화된 값:</label><br>
+    <textarea id="decryptedValue" rows="3" cols="50"></textarea>
+</div>
+
+</body>
+</html>

@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>RSA 암호화 테스트</title>
+    <!-- Forge 라이브러리 포함 -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/forge/0.10.0/forge.min.js"></script>
+    <script>
+        let privateKeyPem; // 비밀 키 PEM 형식 저장
+
+        async function generateKeyPair() {
+            // RSA 키 쌍 생성
+            forge.pki.rsa.generateKeyPair({ bits: 2048, e: 0x10001 }, function(err, keypair) {
+                if (err) {
+                    console.error("키 쌍 생성 오류:", err);
+                    return;
+                }
+                // 비밀 키와 공개 키를 PEM 형식으로 변환
+                const publicKeyPem = forge.pki.publicKeyToPem(keypair.publicKey);
+                privateKeyPem = forge.pki.privateKeyToPem(keypair.privateKey);
+
+                // 공개 키를 textarea에 표시
+                document.getElementById('publicKey').value = publicKeyPem;
+
+                alert("RSA 키 쌍이 생성되었습니다.");
+            });
+        }
+
+        async function rsaEncrypt() {
+            const publicKeyPem = document.getElementById('publicKey').value;
+            if (!publicKeyPem) {
+                alert("먼저 RSA 키 쌍을 생성해주세요!");
+                return;
+            }
+
+            try {
+                const response = await fetch('/rsaEncrypt', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ publicKey: publicKeyPem })
+                });
+                const encryptedValue = await response.text();
+
+                document.getElementById('encryptedValue').value = encryptedValue;
+                alert("암호화 성공");
+            } catch (error) {
+                console.error("암호화 중 오류 발생: ", error);
+            }
+        }
+
+        function rsaDecrypt() {
+            const encryptedValue = document.getElementById('encryptedValue').value;
+            if (!encryptedValue || !privateKeyPem) {
+                alert("암호화된 값 또는 비밀 키가 없습니다!");
+                return;
+            }
+
+            try {
+                // 암호화된 데이터를 Base64 디코딩
+                const encryptedBytes = forge.util.decode64(encryptedValue);
+
+                // 비밀 키를 forge 객체로 변환
+                const privateKey = forge.pki.privateKeyFromPem(privateKeyPem);
+
+                // 복호화 (PKCS#1 v1.5 패딩 사용)
+                const decryptedBytes = privateKey.decrypt(encryptedBytes, 'RSAES-PKCS1-V1_5');
+
+                document.getElementById('decryptedValue').value = decryptedBytes;
+                alert("복호화 성공");
+            } catch (error) {
+                console.error("복호화 중 오류 발생: ", error);
+            }
+        }
+    </script>
+</head>
+<body>
+
+<h1>RSA 암호화/복호화 테스트</h1>
+
+<div>
+    <button onclick="generateKeyPair()">RSA 키 쌍 생성</button>
+    <br><br>
+    <label for="publicKey">공개 키 (PEM 형식):</label><br>
+    <textarea id="publicKey" rows="10" cols="70"></textarea>
+</div>
+
+<div>
+    <button onclick="rsaEncrypt()">랜덤 데이터 암호화</button>
+    <br><br>
+    <label for="encryptedValue">암호화된 값:</label><br>
+    <textarea id="encryptedValue" rows="10" cols="70"></textarea>
+</div>
+
+<div>
+    <button onclick="rsaDecrypt()">암호화된 값 복호화</button>
+    <br><br>
+    <label for="decryptedValue">복호화된 값:</label><br>
+    <textarea id="decryptedValue" rows="3" cols="70"></textarea>
+</div>
+
+</body>
+</html>
